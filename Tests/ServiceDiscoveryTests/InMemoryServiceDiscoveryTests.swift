@@ -66,7 +66,7 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
             let subscription = try await serviceDiscovery.subscribe()
             // for await result in await subscription.next() {
             // FIXME: using iterator instead of for..in due to 5.7 compiler bug
-            var iterator = await subscription.next().makeAsyncIterator()
+            var iterator = subscription.makeAsyncIterator()
             while let result = await iterator.next() {
                 let instances = try result.get()
                 // for try await instances in try await serviceDiscovery.subscribe() {
@@ -122,7 +122,7 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
             let subscription = try await serviceDiscovery.subscribe()
             // for await result in await subscription.next() {
             // FIXME: using iterator instead of for..in due to 5.7 compiler bug
-            var iterator = await subscription.next().makeAsyncIterator()
+            var iterator = subscription.makeAsyncIterator()
             while let result = await iterator.next() {
                 switch counter.wrappingIncrementThenLoad(ordering: .sequentiallyConsistent) {
                 case 1:
@@ -185,7 +185,7 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
             let subscription = try await serviceDiscovery.subscribe()
             // FIXME: using iterator instead of for..in due to 5.7 compiler bug
             // for await result in await subscription.next() {
-            var iterator = await subscription.next().makeAsyncIterator()
+            var iterator = subscription.makeAsyncIterator()
             while let result = await iterator.next() {
                 let instances = try result.get()
                 switch counter1.wrappingIncrementThenLoad(ordering: .sequentiallyConsistent) {
@@ -209,7 +209,7 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
             let subscription = try await serviceDiscovery.subscribe()
             // FIXME: using iterator instead of for..in due to 5.7 compiler bug
             // for await result in await subscription.next() {
-            var iterator = await subscription.next().makeAsyncIterator()
+            var iterator = subscription.makeAsyncIterator()
             while let result = await iterator.next() {
                 let instances = try result.get()
                 // FIXME: casting to HostPort due to a 5.9 compiler bug
@@ -267,7 +267,7 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
             let subscription = try await serviceDiscovery.subscribe()
             // FIXME: using iterator instead of for..in due to 5.7 compiler bug
             // for await result in await subscription.next() {
-            var iterator = await subscription.next().makeAsyncIterator()
+            var iterator = subscription.makeAsyncIterator()
             while let result = await iterator.next() {
                 let instances = try result.get()
                 XCTAssertEqual(instances.count, Self.mockInstances1.count)
@@ -291,22 +291,18 @@ class InMemoryServiceDiscoveryTests: XCTestCase {
     }
 }
 
-private actor ThrowingServiceDiscovery: ServiceDiscovery, ServiceDiscoverySubscription {
+private actor ThrowingServiceDiscovery: ServiceDiscovery {
     var continuation: AsyncStream<Result<[Void], Error>>.Continuation?
 
     func lookup() async throws -> [Void] {
         []
     }
 
-    func subscribe() async throws -> ThrowingServiceDiscovery {
-        self
-    }
-
-    func next() async -> InMemoryServiceDiscovery<Void>.DiscoverySequence {
+    func subscribe() async throws -> InMemoryServiceDiscovery<Void>.Subscription {
         let (stream, continuation) = AsyncStream.makeStream(of: Result<[Void], Error>.self)
         self.continuation = continuation
         continuation.yield(.success([])) // get us going
-        return InMemoryServiceDiscovery.DiscoverySequence(stream)
+        return InMemoryServiceDiscovery<Void>._DiscoverySequence(stream)
     }
 
     func yield(error: Error) {

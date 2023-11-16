@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-public actor InMemoryServiceDiscovery<Instance>: ServiceDiscovery, ServiceDiscoverySubscription {
+public actor InMemoryServiceDiscovery<Instance: Sendable>: ServiceDiscovery {
     private var instances: [Instance]
     private var nextSubscriptionID = 0
     private var subscriptions: [Int: AsyncStream<Result<[Instance], Error>>.Continuation]
@@ -30,12 +30,7 @@ public actor InMemoryServiceDiscovery<Instance>: ServiceDiscovery, ServiceDiscov
 
     /// ServiceDiscovery implementation
     /// Subscribes to receive a service's instances whenever they change.
-    public func subscribe() async throws -> InMemoryServiceDiscovery {
-        self
-    }
-
-    /// ServiceDiscoverySubscription implementation, provides an AsyncSequence to consume
-    public func next() async -> _DiscoverySequence {
+    public func subscribe() async throws -> _DiscoverySequence {
         defer { self.nextSubscriptionID += 1 }
         let subscriptionID = self.nextSubscriptionID
 
@@ -72,7 +67,7 @@ public actor InMemoryServiceDiscovery<Instance>: ServiceDiscovery, ServiceDiscov
     }
 
     /// Internal use only
-    public struct _DiscoverySequence: AsyncSequence {
+    public struct _DiscoverySequence: ServiceDiscoverySubscription {
         public typealias Element = Result<[Instance], Error>
 
         private var underlying: AsyncStream<Result<[Instance], Error>>
@@ -85,7 +80,7 @@ public actor InMemoryServiceDiscovery<Instance>: ServiceDiscovery, ServiceDiscov
             AsyncIterator(self.underlying.makeAsyncIterator())
         }
 
-        public struct AsyncIterator: AsyncIteratorProtocol {
+        public struct AsyncIterator: ServiceDiscoverySubscriptionIterator {
             private var underlying: AsyncStream<Result<[Instance], Error>>.Iterator
 
             init(_ underlying: AsyncStream<Result<[Instance], Error>>.Iterator) {

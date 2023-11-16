@@ -26,23 +26,47 @@ public protocol ServiceDiscovery: Sendable {
     func lookup() async throws -> [Instance]
 
     /// Subscribes to receive service discovery change notification whenever service discovery instances change.
-    ///
-    /// - Returns a ``ServiceDiscoverySubscription`` which produces an ``AsyncSequence`` of changes in  the service discovery instances.
+    /// 
+    /// - Returns: An ``AsyncSequence`` of changes in the service discovery instances.
     /// - throws when failing to establish subscription
     func subscribe() async throws -> Subscription
 }
 
-/// The ServiceDiscoverySubscription returns an AsyncSequence of Result type, with either the
-/// instances discovered or an error if a discovery error has occurred.
-/// The client should decide how to best handle errors in this case, e.g. terminate
+/// The ``ServiceDiscoverySubscription`` constraints the AsyncSequence protocol:
+/// The Element type must be a Swift Result of either the discovered Instances or an interim subscription
+/// error. The ServiceDiscoverySubscription returns Results (instead of throwing) to express that subscription
+/// errors might happen but do not signal a terminal state for the subscription.
+///
+/// Clients should decide how to best handle subscription errors, e.g. terminate
 /// the subscription or continue and handle the errors, for example by recording or
 /// propagating them.
-public protocol ServiceDiscoverySubscription: Sendable {
+///
+/// - Warning: If clients terminate because of errors in the service discovery subscription, an outage in
+///            the service backing the service discovery can have a significant blast radius. Consider the
+///            service discovery SLOs and your own SLOs when deciding to terminate the client based on
+///            an error in the service discovery subscription. \
+///            \
+///            We generally advice to keep your client running, if it can continue to handle requests, even
+///            if the service discovery service is unresponsive for some time.
+public protocol ServiceDiscoverySubscription: AsyncSequence, Sendable where Element == Result<[Instance], Error>, DiscoveryIterator == AsyncIterator {
     /// Service discovery instance type
     associatedtype Instance: Sendable
-    /// AsyncSequence of Service discovery instances
-    associatedtype DiscoverySequence: Sendable, AsyncSequence where DiscoverySequence.Element == Result<[Instance], Error>
 
-    /// -  Returns a ``DiscoverySequence``, which is an ``AsyncSequence`` where each of its items is a snapshot listing of service instances.
-    func next() async -> DiscoverySequence
+    associatedtype DiscoveryIterator: ServiceDiscoverySubscriptionIterator
+
+    /// Creates the asynchronous iterator that produces elements of this
+    /// asynchronous sequence.
+    ///
+    /// - Returns: An instance of the `AsyncIterator` type used to produce
+    /// elements of the asynchronous sequence.
+    func makeAsyncIterator() -> DiscoveryIterator
+}
+
+/// The ``ServiceDiscoverySubscriptionIterator`` constraints an AsyncIteratorProtocol further:
+/// The call to next must not throw but instead return a Swift Result of either the discovered Instances or 
+/// an interim subscription error.
+public protocol ServiceDiscoverySubscriptionIterator: AsyncIteratorProtocol where Element == Result<[Instance], Error> {
+    associatedtype Instance
+
+    mutating func next() async -> Result<[Instance], Error>?
 }
